@@ -1,0 +1,54 @@
+% Learning test for sparse convolutional coding
+
+clear;
+close all;
+
+%% Load the data
+addpath('../image_helpers');%添加其他功能函数的路径
+CONTRAST_NORMALIZE = 'local_cn'; %进行对比度规范化
+ZERO_MEAN = 1;   %0均值化
+COLOR_IMAGES = 'gray';   %转换为灰度                     
+[b] = CreateImages('../Data/',CONTRAST_NORMALIZE,ZERO_MEAN,COLOR_IMAGES); % Replace directory with large image data directory.
+size(b,1) %100
+size(b,2) %100
+size(b,3) %1
+size(b,4) %6
+
+
+
+b = reshape(b, size(b,1), size(b,2), [] ) ;
+%% Define the parameters
+kernel_size = [11, 11, 100];
+lambda_residual = 1.0;
+lambda = 1.0; %2.8
+
+fprintf('Doing sparse coding kernel learning for k = %d [%d x %d] kernels.\n\n', kernel_size(3), kernel_size(1), kernel_size(2) )
+
+%% Optim options
+verbose_admm = 'all';
+max_it = 20;
+tol = 1e-3;
+tic();
+
+%% Replace with add_learn_conv2D_dzParallel.m if necessary (Both d and z parallel for lower memory and faster computation)
+[ d, z, Dz, iterations]  = admm_learn_conv2D_large_dParallel(b, kernel_size, lambda_residual, lambda, max_it, tol, verbose_admm, []);
+tt = toc
+
+%% Show result
+psf_radius = 5;
+figure();    
+pd = 1;
+sqr_k = ceil(sqrt(size(d,3)));
+d_disp = zeros( sqr_k * [kernel_size(1) + pd, kernel_size(2) + pd] + [pd, pd]);
+for j = 0:size(d,3) - 1
+    d_disp( floor(j/sqr_k) * (kernel_size(1) + pd) + pd + (1:kernel_size(1)) , mod(j,sqr_k) * (kernel_size(2) + pd) + pd + (1:kernel_size(2)) ) = d(:,:,j + 1); 
+end
+imagesc(d_disp), colormap gray, axis image, colorbar, title('Final filter estimate');
+
+
+%% Save
+prefix = 'ours';
+save(sprintf('Filters_%s_2D_large.mat', prefix), 'd', 'Dz', 'iterations');
+
+%% Debug
+fprintf('Done sparse coding learning! --> Time %2.2f sec.\n\n', tt)
